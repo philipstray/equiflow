@@ -1,12 +1,39 @@
 // src/App.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
+import { fetchName } from "./actions";
+
+
+function useFetchName() {
+  const [name, setName] = useState("unknown");
+  const [loading, setLoading] = useState(false);
+
+  const fetchNameData = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchName();
+      setName(data.name);
+    } catch (error) {
+      console.error("Failed to fetch name:", error);
+      setName("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNameData();
+  }, []);
+
+  return { name, loading, refetch: fetchNameData };
+}
 
 function App() {
   const [count, setCount] = useState(0);
-  const [name, setName] = useState("unknown");
+  const { name, loading, refetch } = useFetchName();
 
+  
   return (
     <>
      <div>
@@ -25,14 +52,11 @@ function App() {
       </div>
       <div className="card">
         <button
-          onClick={() => {
-            fetch("/api/")
-              .then((res) => res.json() as Promise<{ name: string }>)
-              .then((data) => setName(data.name));
-          }}
+          onClick={refetch}
           aria-label="get name"
+          disabled={loading}
         >
-          Name from API is: {name}
+          {loading ? "Loading..." : `Name from API is: ${name}`}
         </button>
       </div>
     </>
