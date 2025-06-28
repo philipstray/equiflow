@@ -1,11 +1,16 @@
-import DataService from "../worker";
-
-interface Env {
-  DATA_SERVICE: DataService;
-}
-
 export async function fetchName(): Promise<{ name: string }> {
-  // This function is used to fetch a name from the DataService
-  const response = await (process.env as unknown as Env).DATA_SERVICE.getName();
-  return response;
+  // Make an HTTP request to the Worker's API endpoint
+  const response = await fetch('/api/name', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json() as { name: string };
+  return data;
 }

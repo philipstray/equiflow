@@ -1,42 +1,33 @@
 // src/App.tsx
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "./App.css";
-import { fetchName } from "./actions";
-
-
-function useFetchName() {
-  const [name, setName] = useState("unknown");
-  const [loading, setLoading] = useState(false);
-
-  const fetchNameData = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchName();
-      setName(data.name);
-    } catch (error) {
-      console.error("Failed to fetch name:", error);
-      setName("error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNameData();
-  }, []);
-
-  return { name, loading, refetch: fetchNameData };
-}
+import { trpc } from "./trpc";
 
 function App() {
   const [count, setCount] = useState(0);
-  const { name, loading, refetch } = useFetchName();
-
   
+  // This feels just like Next.js server actions!
+  const { data: nameData, isLoading, refetch } = trpc.getName.useQuery();
+  
+  // Example mutation (like a server action)
+  const createUserMutation = trpc.createUser.useMutation();
+
+  const handleCreateUser = async () => {
+    try {
+      const result = await createUserMutation.mutateAsync({
+        name: "John Doe",
+        email: "john@example.com",
+      });
+      console.log("User created:", result);
+    } catch (error) {
+      console.error("Failed to create user:", error);
+    }
+  };
+
   return (
     <>
-     <div>
+      <div>
         <button
           onClick={() => setCount((count) => count + 1)}
           aria-label="increment"
@@ -52,12 +43,23 @@ function App() {
       </div>
       <div className="card">
         <button
-          onClick={refetch}
+          onClick={() => refetch()}
           aria-label="get name"
-          disabled={loading}
+          disabled={isLoading}
         >
-          {loading ? "Loading..." : `Name from API is: ${name}`}
+          {isLoading ? "Loading..." : `Name from API is: ${nameData?.name || 'unknown'}`}
         </button>
+      </div>
+      <div className="card">
+        <button
+          onClick={handleCreateUser}
+          disabled={createUserMutation.isPending}
+        >
+          {createUserMutation.isPending ? "Creating..." : "Create User"}
+        </button>
+        {createUserMutation.data && (
+          <p>Created user: {createUserMutation.data.name}</p>
+        )}
       </div>
     </>
   );
