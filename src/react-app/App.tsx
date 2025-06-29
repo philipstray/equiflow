@@ -3,6 +3,7 @@
 import { useState } from "react";
 import "./App.css";
 import { useGetName, useCreateUser, useGetUsers, useHealthCheck, useServerActions } from "./server-actions";
+import { NeverthrowDemo } from "./components/NeverthrowDemo";
 
 function App() {
   const [count, setCount] = useState(0);
@@ -171,6 +172,11 @@ function App() {
         ) : (
           <p>No users found</p>
         )}
+      </div>
+
+      {/* Neverthrow Integration Demo */}
+      <div style={{ marginTop: '40px', border: '2px solid #007bff', borderRadius: '8px' }}>
+        <NeverthrowDemo />
       </div>
     </>
   );

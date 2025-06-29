@@ -1,30 +1,72 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { Result, ResultAsync, ok, err } from 'neverthrow';
 
-// Import the DataService type (we'll import the class at runtime to avoid circular dependencies)
-type DataService = {
-  getName(): Promise<{ name: string }>;
-  createUser(userData: { name: string; email: string; age?: number }): Promise<{
-    id: string;
-    name: string;
-    email: string;
-    age?: number;
-    createdAt: string;
-  }>;
-  getUsers(options?: { limit?: number; offset?: number; search?: string }): Promise<{
-    users: Array<{ id: string; name: string; email: string; createdAt: string }>;
-    total: number;
-    hasMore: boolean;
-  }>;
-  healthCheck(): Promise<{
-    status: string;
-    timestamp: string;
-    version: string;
-  }>;
+// Define our error types for better type safety
+type AppError = 
+  | { type: 'VALIDATION_ERROR'; message: string; field?: string }
+  | { type: 'SERVICE_UNAVAILABLE'; message: string }
+  | { type: 'NOT_FOUND'; message: string }
+  | { type: 'BLOCKED_EMAIL'; message: string }
+  | { type: 'INTERNAL_ERROR'; message: string };
+
+// Helper function to convert our Result to tRPC errors
+const resultToTRPC = <T>(result: Result<T, AppError>): T => {
+  if (result.isErr()) {
+    const error = result.error;
+    switch (error.type) {
+      case 'VALIDATION_ERROR':
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error.message,
+        });
+      case 'BLOCKED_EMAIL':
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error.message,
+        });
+      case 'NOT_FOUND':
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: error.message,
+        });
+      case 'SERVICE_UNAVAILABLE':
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      case 'INTERNAL_ERROR':
+      default:
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+    }
+  }
+  return result.value;
 };
 
 interface Env {
-  DATA_SERVICE?: DataService;
+  DATA_SERVICE?: {
+    getName(): Promise<Result<{ name: string }, AppError>>;
+    createUser(userData: { name: string; email: string; age?: number }): Promise<Result<{
+      id: string;
+      name: string;
+      email: string;
+      age?: number;
+      createdAt: string;
+    }, AppError>>;
+    getUsers(options?: { limit?: number; offset?: number; search?: string }): Promise<Result<{
+      users: Array<{ id: string; name: string; email: string; createdAt: string }>;
+      total: number;
+      hasMore: boolean;
+    }, AppError>>;
+    healthCheck(): Promise<Result<{
+      status: string;
+      timestamp: string;
+      version: string;
+    }, AppError>>;
+  };
   // Add other bindings here as needed
   // DB?: D1Database;
   // MY_KV?: KVNamespace;
@@ -72,32 +114,29 @@ export const appRouter = t.router({
   // Enhanced getName with caching and error handling
   getName: baseProcedure
     .query(async ({ ctx }) => {
-      try {
-        // Access bindings from context if needed
-        const result = await ctx.env?.DATA_SERVICE?.getName();
-        
-        // Simulate potential errors for demo
-        if (!result) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Error initializing DataService',
+      // For now, create a simple fallback since we don't have the actual service
+      const result = ctx.env?.DATA_SERVICE ? 
+        await ResultAsync.fromPromise(
+          ctx.env.DATA_SERVICE.getName(),
+          (error) => ({ 
+            type: 'SERVICE_UNAVAILABLE' as const, 
+            message: `DataService error: ${error}` 
+          })
+        ).andThen((serviceResult) => {
+          if (serviceResult.isErr()) {
+            return err(serviceResult.error);
+          }
+          return ok({
+            name: serviceResult.value.name,
+            timestamp: new Date().toISOString(),
           });
-        }
-
-        const name = result.name;
-        
-        return { 
-          name: name,
+        }) :
+        ResultAsync.fromSafePromise(Promise.resolve({
+          name: 'Cloudflare Worker with tRPC',
           timestamp: new Date().toISOString(),
-        };
-      } catch (error) {
-        console.error('Error in getName:', error);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get name',
-          cause: error,
-        });
-      }
+        }));
+
+      return resultToTRPC(await result);
     }),
   
   // Enhanced createUser with validation and error handling
@@ -107,42 +146,44 @@ export const appRouter = t.router({
       email: z.string().email('Invalid email format'),
       age: z.number().int().min(0).max(150).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
-      try {
-        // Here you could use your Worker bindings like D1, KV, etc.
-        // const db = ctx.env?.DB;
-        // const result = await db.prepare('INSERT INTO users...').bind(input.name, input.email).run();
-        console.log(ctx.env)
-        // Simulate validation error
+    .mutation(async ({ input }) => {
+      // Pre-validation using neverthrow
+      const validateInput = (): Result<typeof input, AppError> => {
         if (input.email.includes('blocked')) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'This email domain is blocked',
-          });
+          return err({ type: 'BLOCKED_EMAIL', message: 'This email domain is blocked' });
         }
-        
-        const user = {
-          id: crypto.randomUUID(),
-          name: input.name,
-          email: input.email,
-          age: input.age,
-          createdAt: new Date().toISOString(),
-        };
-        
-        console.log('Created user:', user);
-        return user;
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          throw error;
+        return ok(input);
+      };
+
+      const result = ResultAsync.fromSafePromise(
+        (async () => {
+          const validationResult = validateInput();
+          if (validationResult.isErr()) {
+            throw validationResult.error;
+          }
+          
+          const validInput = validationResult.value;
+          
+          // Simulate database operation
+          const user = {
+            id: crypto.randomUUID(),
+            name: validInput.name,
+            email: validInput.email,
+            age: validInput.age,
+            createdAt: new Date().toISOString(),
+          };
+          
+          console.log('Created user:', user);
+          return user;
+        })()
+      ).mapErr((error): AppError => {
+        if (typeof error === 'object' && error !== null && 'type' in error) {
+          return error as AppError;
         }
-        
-        console.error('Error creating user:', error);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create user',
-          cause: error,
-        });
-      }
+        return { type: 'INTERNAL_ERROR', message: `Failed to create user: ${error}` };
+      });
+
+      return resultToTRPC(await result);
     }),
 
   // Batch operations example
@@ -153,69 +194,73 @@ export const appRouter = t.router({
       search: z.string().optional(),
     }))
     .query(async ({ input, ctx }) => {
-      try {
-        // Try to use the RPC method first, fall back to direct implementation
-        if (ctx.env?.DATA_SERVICE?.getUsers) {
-          return await ctx.env.DATA_SERVICE.getUsers(input);
-        }
-        
-        // Fallback implementation
-        const allUsers = Array.from({ length: 25 }, (_, i) => ({
-          id: `user-${i}`,
-          name: `User ${i}`,
-          email: `user${i}@example.com`,
-          createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-        }));
-        
-        let filteredUsers = allUsers;
-        if (input.search) {
-          filteredUsers = allUsers.filter(user => 
-            user.name.toLowerCase().includes(input.search!.toLowerCase()) ||
-            user.email.toLowerCase().includes(input.search!.toLowerCase())
-          );
-        }
-        
-        const users = filteredUsers.slice(input.offset, input.offset + input.limit);
-        
-        return {
-          users,
-          total: filteredUsers.length,
-          hasMore: input.offset + input.limit < filteredUsers.length,
-        };
-      } catch (error) {
-        console.error('Error in getUsers:', error);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get users',
-          cause: error,
-        });
-      }
+      const result = ctx.env?.DATA_SERVICE?.getUsers ?
+        await ResultAsync.fromPromise(
+          ctx.env.DATA_SERVICE.getUsers(input),
+          (error) => ({ 
+            type: 'INTERNAL_ERROR' as const, 
+            message: `Failed to get users: ${error}` 
+          })
+        ).andThen((serviceResult) => {
+          if (serviceResult.isErr()) {
+            return err(serviceResult.error);
+          }
+          return ok(serviceResult.value);
+        }) :
+        // Fallback implementation with neverthrow
+        ResultAsync.fromSafePromise((async () => {
+          const allUsers = Array.from({ length: 25 }, (_, i) => ({
+            id: `user-${i}`,
+            name: `User ${i}`,
+            email: `user${i}@example.com`,
+            createdAt: new Date(Date.now() - i * 86400000).toISOString(),
+          }));
+          
+          let filteredUsers = allUsers;
+          if (input.search) {
+            filteredUsers = allUsers.filter(user => 
+              user.name.toLowerCase().includes(input.search!.toLowerCase()) ||
+              user.email.toLowerCase().includes(input.search!.toLowerCase())
+            );
+          }
+          
+          const users = filteredUsers.slice(input.offset, input.offset + input.limit);
+          
+          return {
+            users,
+            total: filteredUsers.length,
+            hasMore: input.offset + input.limit < filteredUsers.length,
+          };
+        })());
+
+      return resultToTRPC(await result);
     }),
 
   // Health check endpoint
   healthCheck: baseProcedure
     .query(async ({ ctx }) => {
-      try {
-        // Try to use the RPC method first
-        if (ctx.env?.DATA_SERVICE?.healthCheck) {
-          return await ctx.env.DATA_SERVICE.healthCheck();
-        }
-        
+      const result = ctx.env?.DATA_SERVICE?.healthCheck ?
+        await ResultAsync.fromPromise(
+          ctx.env.DATA_SERVICE.healthCheck(),
+          (error) => ({ 
+            type: 'INTERNAL_ERROR' as const, 
+            message: `Health check failed: ${error}` 
+          })
+        ).andThen((serviceResult) => {
+          if (serviceResult.isErr()) {
+            return err(serviceResult.error);
+          }
+          return ok(serviceResult.value);
+        }) :
         // Fallback implementation
-        return {
+        ResultAsync.fromSafePromise(Promise.resolve({
           status: 'healthy',
           timestamp: new Date().toISOString(),
           version: '1.0.0',
           trpc: 'enabled',
-        };
-      } catch (error) {
-        console.error('Error in healthCheck:', error);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Health check failed',
-          cause: error,
-        });
-      }
+        }));
+
+      return resultToTRPC(await result);
     }),
 });
 
