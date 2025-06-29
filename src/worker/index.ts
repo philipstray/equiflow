@@ -12,10 +12,12 @@ type AppError =
   | { type: 'INTERNAL_ERROR'; message: string };
 
 interface Env {
-  // Add other bindings here as needed
+  // Add other bindings here as needed when you have them
+  // Example bindings (commented out):
   // DB?: D1Database;
-  // MY_KV?: KVNamespace;
+  // MY_KV?: KVNamespace;  
   // MY_BUCKET?: R2Bucket;
+  [key: string]: unknown;
 }
 
 export default class DataService extends WorkerEntrypoint<Env> {
@@ -45,10 +47,7 @@ export default class DataService extends WorkerEntrypoint<Env> {
         req: request,
         router: appRouter,
         createContext: () => ({ 
-          env: { 
-            ...this.env,
-            DATA_SERVICE: this, // Pass this worker instance for RPC calls
-          }, 
+          env: this.env, 
           request 
         }),
         responseMeta() {

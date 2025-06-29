@@ -24,15 +24,15 @@ type ClientError =
 
 // Helper to convert tRPC errors to our Result type
 const handleTRPCError = (error: unknown): ClientError => {
-  const err = error as any; // tRPC error shape is complex
+  const err = error as { data?: { code?: string }; message?: string }; // tRPC error shape
   if (err?.data?.code) {
     switch (err.data.code) {
       case 'BAD_REQUEST':
-        return { type: 'VALIDATION_ERROR', message: err.message };
+        return { type: 'VALIDATION_ERROR', message: err.message || 'Validation failed' };
       case 'INTERNAL_SERVER_ERROR':
-        return { type: 'SERVER_ERROR', message: err.message };
+        return { type: 'SERVER_ERROR', message: err.message || 'Server error' };
       default:
-        return { type: 'UNKNOWN_ERROR', message: err.message };
+        return { type: 'UNKNOWN_ERROR', message: err.message || 'Unknown error' };
     }
   }
   
@@ -146,7 +146,7 @@ export const useCreateUserResult = () => {
   const utils = trpc.useUtils();
   const mutation = trpc.createUser.useMutation();
   
-  const mutateWithResult = async (userData: { name: string; email: string; age?: number }): Promise<Result<any, ClientError>> => {
+  const mutateWithResult = async (userData: { name: string; email: string; age?: number }): Promise<Result<CreateUserResponse, ClientError>> => {
     try {
       const result = await mutation.mutateAsync(userData);
       

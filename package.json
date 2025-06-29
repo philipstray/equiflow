@@ -1,6 +1,6 @@
 {
   "name": "equiflow",
-  "description": "A template for building a React application with Vite, Hono, and Cloudflare Workers",
+  "description": "Early draft of crm app.",
   "version": "0.0.0",
   "cloudflare": {
     "label": "Vite React Template",

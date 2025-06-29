@@ -47,30 +47,11 @@ const resultToTRPC = <T>(result: Result<T, AppError>): T => {
 };
 
 interface Env {
-  DATA_SERVICE?: {
-    getName(): Promise<Result<{ name: string }, AppError>>;
-    createUser(userData: { name: string; email: string; age?: number }): Promise<Result<{
-      id: string;
-      name: string;
-      email: string;
-      age?: number;
-      createdAt: string;
-    }, AppError>>;
-    getUsers(options?: { limit?: number; offset?: number; search?: string }): Promise<Result<{
-      users: Array<{ id: string; name: string; email: string; createdAt: string }>;
-      total: number;
-      hasMore: boolean;
-    }, AppError>>;
-    healthCheck(): Promise<Result<{
-      status: string;
-      timestamp: string;
-      version: string;
-    }, AppError>>;
-  };
-  // Add other bindings here as needed
+  // Add other Cloudflare bindings here as needed
   // DB?: D1Database;
   // MY_KV?: KVNamespace;
   // MY_BUCKET?: R2Bucket;
+  [key: string]: unknown;
 }
 // Define context type
 interface Context {
@@ -111,30 +92,13 @@ const baseProcedure = t.procedure.use(loggerMiddleware);
 
 // Create the main router with enhanced procedures
 export const appRouter = t.router({
-  // Enhanced getName with caching and error handling
+  // Enhanced getName with direct implementation
   getName: baseProcedure
-    .query(async ({ ctx }) => {
-      // For now, create a simple fallback since we don't have the actual service
-      const result = ctx.env?.DATA_SERVICE ? 
-        await ResultAsync.fromPromise(
-          ctx.env.DATA_SERVICE.getName(),
-          (error) => ({ 
-            type: 'SERVICE_UNAVAILABLE' as const, 
-            message: `DataService error: ${error}` 
-          })
-        ).andThen((serviceResult) => {
-          if (serviceResult.isErr()) {
-            return err(serviceResult.error);
-          }
-          return ok({
-            name: serviceResult.value.name,
-            timestamp: new Date().toISOString(),
-          });
-        }) :
-        ResultAsync.fromSafePromise(Promise.resolve({
-          name: 'Cloudflare Worker with tRPC',
-          timestamp: new Date().toISOString(),
-        }));
+    .query(async () => {
+      const result = ResultAsync.fromSafePromise(Promise.resolve({
+        name: 'Cloudflare Worker with tRPC',
+        timestamp: new Date().toISOString(),
+      }));
 
       return resultToTRPC(await result);
     }),
@@ -193,72 +157,46 @@ export const appRouter = t.router({
       offset: z.number().min(0).default(0),
       search: z.string().optional(),
     }))
-    .query(async ({ input, ctx }) => {
-      const result = ctx.env?.DATA_SERVICE?.getUsers ?
-        await ResultAsync.fromPromise(
-          ctx.env.DATA_SERVICE.getUsers(input),
-          (error) => ({ 
-            type: 'INTERNAL_ERROR' as const, 
-            message: `Failed to get users: ${error}` 
-          })
-        ).andThen((serviceResult) => {
-          if (serviceResult.isErr()) {
-            return err(serviceResult.error);
-          }
-          return ok(serviceResult.value);
-        }) :
-        // Fallback implementation with neverthrow
-        ResultAsync.fromSafePromise((async () => {
-          const allUsers = Array.from({ length: 25 }, (_, i) => ({
-            id: `user-${i}`,
-            name: `User ${i}`,
-            email: `user${i}@example.com`,
-            createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-          }));
-          
-          let filteredUsers = allUsers;
-          if (input.search) {
-            filteredUsers = allUsers.filter(user => 
-              user.name.toLowerCase().includes(input.search!.toLowerCase()) ||
-              user.email.toLowerCase().includes(input.search!.toLowerCase())
-            );
-          }
-          
-          const users = filteredUsers.slice(input.offset, input.offset + input.limit);
-          
-          return {
-            users,
-            total: filteredUsers.length,
-            hasMore: input.offset + input.limit < filteredUsers.length,
-          };
-        })());
+    .query(async ({ input }) => {
+      // Direct implementation without service binding
+      const result = ResultAsync.fromSafePromise((async () => {
+        const allUsers = Array.from({ length: 25 }, (_, i) => ({
+          id: `user-${i}`,
+          name: `User ${i}`,
+          email: `user${i}@example.com`,
+          createdAt: new Date(Date.now() - i * 86400000).toISOString(),
+        }));
+        
+        let filteredUsers = allUsers;
+        if (input.search) {
+          filteredUsers = allUsers.filter(user => 
+            user.name.toLowerCase().includes(input.search!.toLowerCase()) ||
+            user.email.toLowerCase().includes(input.search!.toLowerCase())
+          );
+        }
+        
+        const users = filteredUsers.slice(input.offset, input.offset + input.limit);
+        
+        return {
+          users,
+          total: filteredUsers.length,
+          hasMore: input.offset + input.limit < filteredUsers.length,
+        };
+      })());
 
       return resultToTRPC(await result);
     }),
 
   // Health check endpoint
   healthCheck: baseProcedure
-    .query(async ({ ctx }) => {
-      const result = ctx.env?.DATA_SERVICE?.healthCheck ?
-        await ResultAsync.fromPromise(
-          ctx.env.DATA_SERVICE.healthCheck(),
-          (error) => ({ 
-            type: 'INTERNAL_ERROR' as const, 
-            message: `Health check failed: ${error}` 
-          })
-        ).andThen((serviceResult) => {
-          if (serviceResult.isErr()) {
-            return err(serviceResult.error);
-          }
-          return ok(serviceResult.value);
-        }) :
-        // Fallback implementation
-        ResultAsync.fromSafePromise(Promise.resolve({
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          version: '1.0.0',
-          trpc: 'enabled',
-        }));
+    .query(async () => {
+      // Direct implementation
+      const result = ResultAsync.fromSafePromise(Promise.resolve({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0',
+        trpc: 'enabled',
+      }));
 
       return resultToTRPC(await result);
     }),
