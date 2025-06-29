@@ -9,34 +9,34 @@ importers:
   .:
     dependencies:
       '@tanstack/react-query':
-        specifier: ^5.81.5
+        specifier: 5.81.5
         version: 5.81.5(react@19.1.0)
       '@tanstack/react-query-devtools':
-        specifier: ^5.81.5
+        specifier: 5.81.5
         version: 5.81.5(@tanstack/react-query@5.81.5(react@19.1.0))(react@19.1.0)
       '@trpc/client':
-        specifier: ^11.4.3
+        specifier: 11.4.3
         version: 11.4.3(@trpc/server@11.4.3(typescript@5.8.3))(typescript@5.8.3)
       '@trpc/react-query':
-        specifier: ^11.4.3
+        specifier: 11.4.3
         version: 11.4.3(@tanstack/react-query@5.81.5(react@19.1.0))(@trpc/client@11.4.3(@trpc/server@11.4.3(typescript@5.8.3))(typescript@5.8.3))(@trpc/server@11.4.3(typescript@5.8.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.8.3)
       '@trpc/server':
-        specifier: ^11.4.3
+        specifier: 11.4.3
         version: 11.4.3(typescript@5.8.3)
       hono:
-        specifier: ^4.8.3
+        specifier: 4.8.3
         version: 4.8.3
       neverthrow:
-        specifier: ^8.2.0
+        specifier: 8.2.0
         version: 8.2.0
       react:
-        specifier: ^19.1.0
+        specifier: 19.1.0
         version: 19.1.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
       zod:
-        specifier: ^3.25.67
+        specifier: 3.25.67
         version: 3.25.67
     devDependencies:
       '@cloudflare/vite-plugin':
@@ -61,13 +61,13 @@ importers:
         specifier: 9.27.0
         version: 9.27.0
       eslint-plugin-neverthrow:
-        specifier: ^1.1.4
+        specifier: 1.1.4
         version: 1.1.4(@typescript-eslint/parser@8.31.0(eslint@9.27.0)(typescript@5.8.3))(eslint@9.27.0)(typescript@5.8.3)
       eslint-plugin-react-hooks:
-        specifier: ^5.2.0
+        specifier: 5.2.0
         version: 5.2.0(eslint@9.27.0)
       eslint-plugin-react-refresh:
-        specifier: ^0.4.20
+        specifier: 0.4.20
         version: 0.4.20(eslint@9.27.0)
       globals:
         specifier: 15.15.0
