@@ -15,7 +15,8 @@ export default tseslint.config(
       "tsconfig*.json",
       "package*.json",
       "pnpm-*.yaml",
-      "wrangler.json"
+      "wrangler.json",
+      "examples"
     ] 
   },
   // React app configuration
